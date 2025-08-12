@@ -59,13 +59,55 @@ class ModelHamiltonian:
             m = len(term)
             options = qubits if 'Z' in term else qubits_hidden
             combinations = list(itertools.combinations(options, m))
+            
+           
+                                
+            valid_combinations=self.get_valid_combinations(combinations,term)
+            
             self.connections[term] = combinations
 
+    def get_valid_combinations(self,combinations,term):
+
+        
+        valid_combinations=[]
+        non_Z_indices=[]
+        for i,letter in enumerate(term):
+            if letter!='Z':
+                non_Z_indices.append(i)
+        
+        
+        reject_terms=['v'+str(i) for i in range(self.Ny,self.n_visible)]
+        
+        for combi in combinations:
+            
+            if non_Z_indices==[]:
+                if set(combi).intersection(set(reject_terms))==set(combi):
+                    continue
+            
+            permutations=list(itertools.permutations(combi))
+            
+            for permutation in permutations:
+                
+                flag=True
+                for index in non_Z_indices:
+                    
+                    if permutation[index][0]=='v':
+                        flag=False
+                        break
+                    
+                if flag: 
+                    valid_combinations.append(permutation)
+                    break
+                    
+        
+        
+        return valid_combinations
+    
     def initialize_params(self):
         self.params = {}
         for term in self.terms:
-            self.params[term] = np.random.rand(len(self.connections[term]))
-
+            self.params[term] = np.random.rand(len(self.connections[term]))/len(self.connections[term])
+            self.params[term] = self.params[term]-np.mean(self.params[term])/2
     def qubit_number(self, qubit):
         
         if qubit[0] == 'h':
@@ -127,7 +169,7 @@ class ModelHamiltonian:
                 
                 for i,coefficient in enumerate(self.params[pauli_term]):
                 
-                    coeffs.append(coefficient)
+                    coeffs.append(-coefficient)
                     ops.append(self.operators(pauli_term,self.connections[pauli_term][i]))
         
             else:
@@ -154,7 +196,7 @@ class ModelHamiltonian:
                                 
                     
                     if count==0:
-                        coeffs.append(self.params[pauli_term][i])
+                        coeffs.append(-self.params[pauli_term][i])
                         ops.append(self.operators(pauli_term,self.connections[pauli_term][i]))
                     else:
                         
@@ -162,7 +204,7 @@ class ModelHamiltonian:
                         
                         if new_term != '':    
                         
-                            coeffs.append(self.params[pauli_term][i]*factor)
+                            coeffs.append(-self.params[pauli_term][i]*factor)
                            
                             
                             new_operator=self.operators(new_term,new_connection)
@@ -252,7 +294,219 @@ class ModelHamiltonian:
         
         X=np.concatenate((y,x))
         self.visible_wires=range(self.n_hidden,self.n_hidden+self.n_visible)
+        self.input_wires=range(self.n_hidden+self.Ny,self.n_hidden+self.n_visible)
+        new_x_clamped=[]
+        new_xy_clamped=[]
+        for term,connections in self.connections.items():
+            for connection in connections:
+                
+                
+                operator=self.operators(term,connection)
+            
+                reduced_operator_x,removed_wires_x=self.remove_operators_on_wires([operator],self.input_wires)
+                reduced_operator_xy, removed_wires_xy=self.remove_operators_on_wires([operator],self.visible_wires)
+                prefactor_x=1
+                prefactor_xy=1
+               
+                
+                for wire in removed_wires_x[0]:
+                    prefactor_x*= X[wire-self.n_hidden]
+                for wire in removed_wires_xy[0]:
+                    prefactor_xy*=X[wire-self.n_hidden]
+               
+            
+                try:
+                    index_x=terms_x.index(reduced_operator_x[0])
+                   
+                    value_x= x_clamped[index_x]*prefactor_x
+                except:
+                    index_x=None
+                    value_x=prefactor_x
+                
+                
+                
+                try:
+                    index_xy=terms_xy.index(reduced_operator_xy[0])
+                    value_xy= xy_clamped[index_xy]*prefactor_xy
+                
+                except:
+                    index_xy=None
+                    value_xy=prefactor_xy
+
+                new_x_clamped.append(value_x)
+                new_xy_clamped.append(value_xy)
+        return np.array(new_x_clamped),np.array(new_xy_clamped)
+               
+                
+
+class modelHamiltonian:
+    def __init__(self, n_hidden, n_visible, terms=['Z','ZZ'], n_output=1,connectivity='all'):
+        self.terms = terms
+        self.n_hidden = n_hidden
+        self.n_visible = n_visible
+        self.Ny=n_output
+        self.output_wires=range(self.n_hidden,self.n_hidden+self.Ny)
+        if connectivity == 'all':
+            self.generate_connections()
+        self.initialize_params()
+    def generate_connections(self):
+        qubits_hidden = ['h'+str(i) for i in range(self.n_hidden)]
+        qubits_visible = ['v'+str(i) for i in range(self.n_visible)]
+        qubits = qubits_hidden + qubits_visible
+        self.connections = {}
+        for term in self.terms:
+            m = len(term)
+            options = qubits if 'Z' in term else qubits_hidden
+            combinations = list(itertools.combinations(options, m))
+            self.connections[term] = combinations
+
+    def initialize_params(self):
+        self.params = {}
+        for term in self.terms:
+            self.params[term] = np.random.rand(len(self.connections[term]))
+
+    def qubit_number(self, qubit):
+        if qubit[0] == 'h':
+            return int(qubit[1])
+        else:
+            return int(qubit[1]) + self.n_hidden
+
+    def operators(self, term, connection):
+        assert len(term) == len(connection)
+        for i, op in enumerate(term):
+            num = self.qubit_number(connection[i])
+            
+            if i == 0:
+                a = operator_list[op](num)
+            else:
+                a = a @ operator_list[op](num)
+        return a
+    
+    def fix_visible(self,connection,x,y):
+
+        for label in connection:
+            if 'v' in label:
+                pass        
         
+    
+    def build_hamiltonians(self,x,y=None):
+        
+       
+        if y is None:        
+            X=x
+            reject_terms=['v'+str(i) for i in range(self.Ny,self.n_visible)]
+            
+        else:    
+            X=np.concatenate((x,y))
+            reject_terms=['v'+str(i) for i in range(self.n_visible)]
+        
+   
+        coeffs, ops = [], []
+    
+        # transverse-x‐field term: − ∑ Γx_a σ^x_a
+      
+        for pauli_term in self.terms:
+         
+           
+            if 'Z' not in pauli_term:
+                
+                for i,coefficient in enumerate(self.params[pauli_term]):
+                
+                    coeffs.append(-coefficient)
+                    ops.append(self.operators(pauli_term,self.connections[pauli_term][i]))
+        
+            else:
+                m=len(pauli_term)
+               
+                for i,connection in enumerate(self.connections[pauli_term]):
+                         
+                    factor=1
+                    count=0
+                    new_connection=[]
+                    for label in connection:
+                        
+                        
+                        if any(sub in label for sub in reject_terms):
+                           
+                           
+                            factor*=X[int(label[1])-self.Ny]
+                            count+=1
+                           
+                        else:
+                            new_connection.append(label)
+                            
+                          
+                                
+                    
+                    if count==0:
+                        coeffs.append(-self.params[pauli_term][i])
+                        ops.append(self.operators(pauli_term,self.connections[pauli_term][i]))
+                    else:
+                        
+                        new_term=pauli_term[count:]
+                        
+                        if new_term != '':    
+                        
+                            coeffs.append(-self.params[pauli_term][i]*factor)
+                           
+                            
+                            new_operator=self.operators(new_term,new_connection)
+                            ops.append(new_operator)
+                       
+        hamiltonian=qml.Hamiltonian(coeffs,ops)        
+          
+       
+        
+        return hamiltonian.simplify()
+
+
+    def remove_operators_on_wires(self,operator_terms, wires_to_remove):
+        """Remove terms from an operator that act on any of the given wires."""
+        #wires_to_remove = set(wires_to_remove)
+        removed_wires_list = []
+        new_ops = []
+        
+        for word in operator_terms:
+            wires=word.wires.tolist()
+            new_word_ops=[]
+            new_word=word
+           
+            
+            if any(x in wires_to_remove for x in wires):
+                new_word= qml.Identity(wires[0])
+               # removed_wires= list(set(wires) & set(wires_to_remove))
+                
+                for i,wire in enumerate(wires):
+                   
+                    
+                    if wire not in wires_to_remove:
+                      
+                        new_word_ops.append(word[i])
+                
+            
+                for i,k in enumerate(new_word_ops):
+                    new_word=new_word@k
+            
+            removed_wires= list(set(wires) & set(wires_to_remove))
+            
+            new_ops.append(new_word.simplify())
+    
+            removed_wires_list.append(removed_wires)
+        return new_ops,removed_wires_list
+            
+    
+    def get_weights(self):
+        weights=np.array([])
+        for term,values in self.params.items():
+            weights=np.concatenate((weights,values))
+
+        return weights
+    
+    def order_match_configs(self,x_clamped,xy_clamped,x,y,terms_x,terms_xy):
+
+        X=np.concatenate((y,x))
+        self.visible_wires=range(self.n_hidden,self.n_hidden+self.n_visible)
+        self.input_data_wires=range(self.n_hidden+self.Ny,self.n_hidden+self.n_visible)
         new_x_clamped=[]
         new_xy_clamped=[]
         for term,connections in self.connections.items():
@@ -260,12 +514,11 @@ class ModelHamiltonian:
                 
                 operator=self.operators(term,connection)
             
-                reduced_operator_x,removed_wires_x=self.remove_operators_on_wires([operator],self.output_wires)
+                reduced_operator_x,removed_wires_x=self.remove_operators_on_wires([operator],self.input_data_wires)
                 reduced_operator_xy, removed_wires_xy=self.remove_operators_on_wires([operator],self.visible_wires)
                 prefactor_x=1
                 prefactor_xy=1
                
-                
                 for wire in removed_wires_x[0]:
                     prefactor_x*= X[wire-self.n_hidden]
                 for wire in removed_wires_xy[0]:
@@ -292,5 +545,3 @@ class ModelHamiltonian:
                 new_xy_clamped.append(value_xy)
         return np.array(new_x_clamped),np.array(new_xy_clamped)
                
-                
-                

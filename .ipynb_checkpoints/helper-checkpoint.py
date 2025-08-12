@@ -227,3 +227,16 @@ def P_polynomial(poly):
     return polynomial.detach().clone()
 
 
+def to_binary(y):
+    classes=np.max(y)
+   
+    n = int(classes).bit_length()
+    bin_y=[]
+    for k in y:
+        binary=[]
+        val=format(k, '0'+str(n)+'b')
+        for i in val:
+            
+            binary.append(int(i))
+        bin_y.append(binary)
+    return np.array(bin_y)
